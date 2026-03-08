@@ -12,8 +12,17 @@ Aplicación móvil completa de punto de venta (POS) con capacidad de procesamien
 ### 💳 Procesamiento de Pagos
 - **Lectura NFC**: Procesa pagos usando tarjetas de crédito/débito por contacto NFC
 - **Pago Manual**: Opción para procesar pagos manualmente sin NFC
-- Estados visuales claros: pendiente, procesando, éxito, error
+- **Tap to Pay (Stripe)**: Convierte tu teléfono en un terminal de pago
+- Estados visuales claros: esperando, procesando, éxito, error
 - Notificaciones en tiempo real del estado del pago
+- Actualización automática al recibir solicitudes vía API
+
+### 🌐 API REST para Integración
+- API para crear solicitudes de pago desde sistemas externos
+- Autenticación mediante API Keys
+- Webhooks para notificar el estado del pago
+- Actualización en tiempo real en la app POS
+- Soporte para metadata personalizada (items, cliente, notas)
 
 ### 🔌 Integración con Pasarelas de Pago
 - Soporte para múltiples pasarelas:
@@ -179,6 +188,71 @@ npm run build:web
 Requiere Expo Dev Client para probar NFC en dispositivos reales
 ```bash
 npx expo prebuild
+```
+
+## Deployment
+
+### Deployment en Tiendas (iOS y Android)
+
+Esta aplicación está lista para ser deployada en App Store y Google Play Store usando Expo Application Services (EAS).
+
+Ver la guía completa de deployment: [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)
+
+#### Pasos rápidos:
+
+1. **Instalar EAS CLI**:
+```bash
+npm install -g eas-cli
+eas login
+```
+
+2. **Configurar el proyecto**:
+```bash
+eas init
+```
+
+3. **Build para producción**:
+```bash
+# iOS
+eas build --profile production --platform ios
+
+# Android
+eas build --profile production --platform android
+
+# Ambos
+eas build --profile production --platform all
+```
+
+4. **Submit a las tiendas**:
+```bash
+# App Store
+eas submit --platform ios
+
+# Google Play
+eas submit --platform android
+```
+
+### Updates Over-The-Air (OTA)
+
+Actualiza tu app sin pasar por las tiendas:
+
+```bash
+eas update --branch production --message "Nueva funcionalidad"
+```
+
+### Configuración Requerida
+
+Antes de deployar, actualiza en `app.json`:
+
+```json
+{
+  "ios": {
+    "bundleIdentifier": "com.tuempresa.posmobile"
+  },
+  "android": {
+    "package": "com.tuempresa.posmobile"
+  }
+}
 ```
 
 ## Solución de Problemas
