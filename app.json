@@ -25,7 +25,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.posmobile",
+      "bundleIdentifier": "com.ayalait.posmobile",
       "buildNumber": "1",
       "infoPlist": {
         "NFCReaderUsageDescription": "Esta aplicación necesita acceso a NFC para procesar pagos con tarjetas contactless",
