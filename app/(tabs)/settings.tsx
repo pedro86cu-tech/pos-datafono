@@ -14,7 +14,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
-import { Building, CreditCard, Save, Trash2, Key, Copy, Plus, Edit2, X } from 'lucide-react-native';
+import { Building, CreditCard, Save, Trash2, Key, Copy, Plus, CreditCard as Edit2, X } from 'lucide-react-native';
 
 interface POSConfig {
   business_name: string;
