@@ -87,6 +87,8 @@ Deno.serve(async (req: Request) => {
 
     // If there's a callback URL, notify the external system
     if (paymentRequest.callback_url) {
+      console.log('Sending webhook to:', paymentRequest.callback_url);
+
       try {
         const callbackPayload = {
           payment_request_id: body.payment_request_id,
@@ -97,7 +99,12 @@ Deno.serve(async (req: Request) => {
           transaction_id: body.transaction_id,
           error_message: body.error_message,
           processed_at: new Date().toISOString(),
+          customer_name: paymentRequest.customer_name,
+          customer_email: paymentRequest.customer_email,
+          note: paymentRequest.note,
         };
+
+        console.log('Webhook payload:', JSON.stringify(callbackPayload, null, 2));
 
         const callbackResponse = await fetch(paymentRequest.callback_url, {
           method: 'POST',
@@ -107,12 +114,22 @@ Deno.serve(async (req: Request) => {
           body: JSON.stringify(callbackPayload),
         });
 
+        const responseText = await callbackResponse.text();
+        console.log('Webhook response status:', callbackResponse.status);
+        console.log('Webhook response body:', responseText);
+
         if (!callbackResponse.ok) {
-          console.error('Callback failed:', await callbackResponse.text());
+          console.error('Callback failed with status:', callbackResponse.status);
+          console.error('Callback error response:', responseText);
+        } else {
+          console.log('Webhook sent successfully to:', paymentRequest.callback_url);
         }
       } catch (callbackError) {
         console.error('Error calling webhook:', callbackError);
+        console.error('Callback URL was:', paymentRequest.callback_url);
       }
+    } else {
+      console.log('No callback_url provided in payment request');
     }
 
     return new Response(

@@ -272,8 +272,11 @@ export default function POSScreen() {
         })
         .eq('id', transactionId);
 
+      console.log('Calling confirm-payment for request:', currentRequest!.id);
+      console.log('Callback URL:', currentRequest?.callback_url);
+
       const apiUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/confirm-payment`;
-      await fetch(apiUrl, {
+      const confirmResponse = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -282,6 +285,13 @@ export default function POSScreen() {
           status: 'completed',
         }),
       });
+
+      const confirmResult = await confirmResponse.json();
+      console.log('Confirm payment response:', confirmResult);
+
+      if (!confirmResponse.ok) {
+        console.error('Error confirming payment:', confirmResult);
+      }
 
       setPaymentResult({
         transaction_id: transactionId,
