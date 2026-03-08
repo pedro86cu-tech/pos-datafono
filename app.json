@@ -21,7 +21,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ayalait.posmobile",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "infoPlist": {
         "NFCReaderUsageDescription": "Esta aplicación necesita acceso a NFC para procesar pagos con tarjetas contactless",
         "NSCameraUsageDescription": "Esta aplicación necesita acceso a la cámara para escanear códigos QR y códigos de barras",
@@ -35,7 +35,7 @@
     },
     "android": {
       "package": "com.ayalait.posmobile",
-      "versionCode": 2,
+      "versionCode": 3,
       "permissions": [
         "android.permission.NFC",
         "android.permission.CAMERA",
@@ -64,14 +64,6 @@
         "expo-camera",
         {
           "cameraPermission": "Esta aplicación necesita acceso a la cámara para escanear códigos QR y códigos de barras"
-        }
-      ],
-      [
-        "@stripe/stripe-react-native",
-        {
-          "merchantIdentifier": "merchant.com.ayalait.posmobile",
-          "enableGooglePay": true,
-          "enableApplePay": false
         }
       ]
     ],
