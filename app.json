@@ -39,7 +39,7 @@
       "userInterfaceStyle": "automatic"
     },
     "android": {
-      "package": "com.yourcompany.posmobile",
+      "package": "com.ayalait.posmobile",
       "versionCode": 1,
       "permissions": [
         "android.permission.NFC",
