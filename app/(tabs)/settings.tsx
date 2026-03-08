@@ -14,7 +14,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
-import { Building, CreditCard, Save, Trash2, Key, Copy, Plus, CreditCard as Edit2, X } from 'lucide-react-native';
+import { Building, CreditCard, Save, Trash2, Key, Copy, Plus, CreditCard as Edit2, X, DollarSign, QrCode, ArrowRightLeft, Receipt } from 'lucide-react-native';
 
 interface POSConfig {
   business_name: string;
@@ -22,6 +22,14 @@ interface POSConfig {
   currency: string;
   origin_system_url: string;
   origin_system_api_key: string;
+}
+
+interface PaymentMethod {
+  id: string;
+  label: string;
+  code: string;
+  icon: any;
+  enabled: boolean;
 }
 
 interface Gateway {
@@ -66,6 +74,17 @@ export default function SettingsScreen() {
   const [newApiKeyName, setNewApiKeyName] = useState('');
   const [editingGatewayId, setEditingGatewayId] = useState<string | null>(null);
   const [editingGateway, setEditingGateway] = useState<Gateway | null>(null);
+
+  const paymentMethods: PaymentMethod[] = [
+    { id: '1', label: 'Efectivo', code: 'cash', icon: DollarSign, enabled: true },
+    { id: '2', label: 'Tarjeta Débito', code: 'card_debit', icon: CreditCard, enabled: true },
+    { id: '3', label: 'Tarjeta Crédito', code: 'card_credit', icon: CreditCard, enabled: true },
+    { id: '4', label: 'Transferencia', code: 'transfer', icon: ArrowRightLeft, enabled: true },
+    { id: '5', label: 'QR/Billetera Digital', code: 'qr', icon: QrCode, enabled: true },
+    { id: '6', label: 'Cheque', code: 'check', icon: Receipt, enabled: false },
+    { id: '7', label: 'Nota de Crédito', code: 'credit_note', icon: Receipt, enabled: false },
+    { id: '8', label: 'QR Mercado Pago', code: 'qr_mp', icon: QrCode, enabled: true },
+  ];
 
   useEffect(() => {
     if (!user) {
@@ -501,6 +520,47 @@ export default function SettingsScreen() {
                 </>
               )}
             </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <DollarSign size={24} color="#2563eb" strokeWidth={2} />
+            <Text style={styles.sectionTitle}>Medios de Pago</Text>
+          </View>
+
+          <View style={styles.helpBox}>
+            <Text style={styles.helpTitle}>Configura los métodos de pago</Text>
+            <Text style={styles.helpText}>
+              Estos son los tipos de pago que tus clientes pueden usar al enviar solicitudes a través de la API.
+            </Text>
+          </View>
+
+          <View style={styles.paymentMethodsGrid}>
+            {paymentMethods.map((method) => {
+              const Icon = method.icon;
+              return (
+                <View key={method.id} style={styles.paymentMethodCard}>
+                  <View style={styles.paymentMethodHeader}>
+                    <Icon size={24} color={method.enabled ? '#2563eb' : '#94a3b8'} strokeWidth={2} />
+                    <Text style={[
+                      styles.paymentMethodLabel,
+                      !method.enabled && styles.paymentMethodLabelDisabled
+                    ]}>
+                      {method.label}
+                    </Text>
+                  </View>
+                  <View style={styles.paymentMethodInfo}>
+                    <Text style={styles.paymentMethodCode}>{method.code}</Text>
+                    {method.enabled && (
+                      <View style={[styles.badge, { backgroundColor: '#dcfce7' }]}>
+                        <Text style={[styles.badgeText, { color: '#16a34a' }]}>Activo</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
           </View>
         </View>
 
@@ -966,5 +1026,44 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+  },
+  paymentMethodsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  paymentMethodCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 16,
+    width: Platform.OS === 'web' ? 'calc(50% - 6px)' : '48%',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  paymentMethodHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  paymentMethodLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1e293b',
+    flex: 1,
+  },
+  paymentMethodLabelDisabled: {
+    color: '#94a3b8',
+  },
+  paymentMethodInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  paymentMethodCode: {
+    fontSize: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    color: '#64748b',
   },
 });

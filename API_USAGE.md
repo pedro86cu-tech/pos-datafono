@@ -40,11 +40,29 @@ POST https://[TU-PROYECTO].supabase.co/functions/v1/create-payment-request
 ```json
 {
   "Content-Type": "application/json",
-  "X-API-Key": "pos_ABC123def456GHI789jkl012MNO345pqr678STU901vwx234"
+  "X-API-Key": "pos_ABC123def456GHI789jkl012MNO345pqr678STU901vwx234",
+  "X-Payment-Type": "card_debit"
 }
 ```
 
 **El header `X-API-Key` es OBLIGATORIO**
+
+**El header `X-Payment-Type` es OPCIONAL** (default: `card_debit`)
+
+#### Tipos de Pago Disponibles
+
+Usa el header `X-Payment-Type` para especificar el método de pago:
+
+| Código | Descripción | Header |
+|--------|-------------|--------|
+| `cash` | Efectivo | `X-Payment-Type: cash` |
+| `card_debit` | Tarjeta Débito | `X-Payment-Type: card_debit` (default) |
+| `card_credit` | Tarjeta Crédito | `X-Payment-Type: card_credit` |
+| `transfer` | Transferencia | `X-Payment-Type: transfer` |
+| `qr` | QR/Billetera Digital | `X-Payment-Type: qr` |
+| `qr_mp` | QR Mercado Pago | `X-Payment-Type: qr_mp` |
+| `check` | Cheque | `X-Payment-Type: check` |
+| `credit_note` | Nota de Crédito | `X-Payment-Type: credit_note` |
 
 ### Body
 
@@ -143,26 +161,58 @@ POST https://[TU-PROYECTO].supabase.co/functions/v1/create-payment-request
 
 ## 3. Ejemplo con cURL
 
-### Básico
+### Básico (Tarjeta de Débito)
 
 ```bash
 curl -X POST \
   https://[TU-PROYECTO].supabase.co/functions/v1/create-payment-request \
   -H "Content-Type: application/json" \
   -H "X-API-Key: pos_ABC123def456GHI789jkl012MNO345pqr678STU901vwx234" \
+  -H "X-Payment-Type: card_debit" \
   -d '{
     "amount": 1250.00,
     "currency": "USD"
   }'
 ```
 
-### Completo (Restaurante)
+### Pago en Efectivo
 
 ```bash
 curl -X POST \
   https://[TU-PROYECTO].supabase.co/functions/v1/create-payment-request \
   -H "Content-Type: application/json" \
   -H "X-API-Key: pos_ABC123def456GHI789jkl012MNO345pqr678STU901vwx234" \
+  -H "X-Payment-Type: cash" \
+  -d '{
+    "amount": 500.00,
+    "currency": "USD",
+    "note": "Pago en efectivo - Mesa 5"
+  }'
+```
+
+### Pago con QR Mercado Pago
+
+```bash
+curl -X POST \
+  https://[TU-PROYECTO].supabase.co/functions/v1/create-payment-request \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: pos_ABC123def456GHI789jkl012MNO345pqr678STU901vwx234" \
+  -H "X-Payment-Type: qr_mp" \
+  -d '{
+    "amount": 850.00,
+    "currency": "UYU",
+    "customer_email": "cliente@email.com"
+  }'
+```
+
+### Completo (Restaurante con Tarjeta de Crédito)
+
+```bash
+curl -X POST \
+  https://[TU-PROYECTO].supabase.co/functions/v1/create-payment-request \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: pos_ABC123def456GHI789jkl012MNO345pqr678STU901vwx234" \
+  -H "X-Payment-Type: card_credit" \
   -d '{
     "amount": 1250.00,
     "currency": "USD",
@@ -193,13 +243,14 @@ curl -X POST \
   }'
 ```
 
-### E-commerce
+### E-commerce (Transferencia Bancaria)
 
 ```bash
 curl -X POST \
   https://tuproyecto.supabase.co/functions/v1/create-payment-request \
   -H "Content-Type: application/json" \
   -H "X-API-Key: pos_ABC123def456GHI789jkl012MNO345pqr678STU901vwx234" \
+  -H "X-Payment-Type: transfer" \
   -d '{
     "amount": 2599.99,
     "currency": "USD",
@@ -304,6 +355,7 @@ async function enviarSolicitudPago(orderData) {
         headers: {
           'Content-Type': 'application/json',
           'X-API-Key': API_KEY,  // ← IMPORTANTE
+          'X-Payment-Type': orderData.paymentType || 'card_debit',  // ← OPCIONAL
         },
         body: JSON.stringify({
           amount: orderData.total,
@@ -340,6 +392,7 @@ const miOrden = {
   total: 99.99,
   customerName: 'Carlos López',
   customerEmail: 'carlos@example.com',
+  paymentType: 'qr_mp',  // ← Especificar tipo de pago
   items: [
     { name: 'Producto Premium', price: 99.99, quantity: 1 }
   ]
@@ -361,7 +414,8 @@ def enviar_solicitud_pago(amount, customer_name, items):
 
     headers = {
         "Content-Type": "application/json",
-        "X-API-Key": API_KEY  # ← IMPORTANTE
+        "X-API-Key": API_KEY,  # ← IMPORTANTE
+        "X-Payment-Type": "cash"  # ← OPCIONAL
     }
 
     payload = {

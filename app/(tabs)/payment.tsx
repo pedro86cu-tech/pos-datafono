@@ -13,7 +13,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
-import { CreditCard, CircleCheck as CheckCircle, Circle as XCircle, Nfc, Smartphone, Receipt, RefreshCw } from 'lucide-react-native';
+import { CreditCard, CircleCheck as CheckCircle, Circle as XCircle, Nfc, Smartphone, Receipt, RefreshCw, QrCode, DollarSign, ArrowRightLeft } from 'lucide-react-native';
 
 let useStripe: any = null;
 if (Platform.OS !== 'web') {
@@ -37,6 +37,7 @@ interface PaymentRequest {
   items?: any[];
   external_sale_id?: string;
   callback_url?: string;
+  payment_type?: string;
 }
 
 interface PaymentResult {
@@ -384,6 +385,69 @@ export default function POSScreen() {
     checkForPendingRequests();
   };
 
+  const getPaymentTypeIcon = (paymentType: string) => {
+    switch (paymentType) {
+      case 'cash':
+        return <DollarSign size={80} color="#3b82f6" strokeWidth={2} />;
+      case 'card_debit':
+      case 'card_credit':
+        return <CreditCard size={80} color="#3b82f6" strokeWidth={2} />;
+      case 'qr':
+      case 'qr_mp':
+        return <QrCode size={80} color="#3b82f6" strokeWidth={2} />;
+      case 'transfer':
+        return <ArrowRightLeft size={80} color="#3b82f6" strokeWidth={2} />;
+      case 'nfc':
+        return <Nfc size={80} color="#3b82f6" strokeWidth={2} />;
+      default:
+        return <CreditCard size={80} color="#3b82f6" strokeWidth={2} />;
+    }
+  };
+
+  const getPaymentTypeLabel = (paymentType: string) => {
+    switch (paymentType) {
+      case 'cash':
+        return 'Efectivo';
+      case 'card_debit':
+        return 'Tarjeta de Débito';
+      case 'card_credit':
+        return 'Tarjeta de Crédito';
+      case 'transfer':
+        return 'Transferencia';
+      case 'qr':
+        return 'QR/Billetera Digital';
+      case 'qr_mp':
+        return 'QR Mercado Pago';
+      case 'check':
+        return 'Cheque';
+      case 'credit_note':
+        return 'Nota de Crédito';
+      case 'nfc':
+        return 'Pago NFC/Contactless';
+      default:
+        return 'Tarjeta de Débito';
+    }
+  };
+
+  const getPaymentTypeInstructions = (paymentType: string) => {
+    switch (paymentType) {
+      case 'cash':
+        return 'Recibe el efectivo del cliente';
+      case 'card_debit':
+      case 'card_credit':
+        return 'Ingrese los datos de la tarjeta';
+      case 'qr':
+      case 'qr_mp':
+        return 'Cliente debe escanear el código QR';
+      case 'transfer':
+        return 'Cliente debe realizar la transferencia';
+      case 'nfc':
+        return 'Acerque la tarjeta o dispositivo';
+      default:
+        return 'Ingrese los datos de la tarjeta';
+    }
+  };
+
   const renderWaitingState = () => (
     <View style={styles.centerContainer}>
       <View style={styles.emptyCard}>
@@ -466,35 +530,39 @@ export default function POSScreen() {
     resetToWaiting();
   };
 
-  const renderProcessingState = () => (
-    <View style={styles.centerContainer}>
-      <View style={styles.processingCard}>
-        <Text style={styles.processingTitle}>Procesando pago...</Text>
+  const renderProcessingState = () => {
+    const paymentType = currentRequest?.payment_type || 'card_debit';
 
-        <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-          <CreditCard size={80} color="#3b82f6" strokeWidth={2} />
-        </Animated.View>
+    return (
+      <View style={styles.centerContainer}>
+        <View style={styles.processingCard}>
+          <Text style={styles.processingTitle}>Procesando pago...</Text>
 
-        <Text style={styles.processingText}>Ingrese los datos de la tarjeta</Text>
-        <Text style={styles.processingSubtext}>
-          Visa • Mastercard • Amex • Discover
-        </Text>
+          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+            {getPaymentTypeIcon(paymentType)}
+          </Animated.View>
 
-        <View style={styles.amountBadge}>
-          <Text style={styles.amountBadgeText}>
-            $ {currentRequest?.amount.toFixed(2)}
+          <Text style={styles.processingText}>{getPaymentTypeInstructions(paymentType)}</Text>
+          <Text style={styles.processingSubtext}>
+            {getPaymentTypeLabel(paymentType)}
           </Text>
-        </View>
 
-        <TouchableOpacity
-          style={styles.cancelButton}
-          onPress={cancelPayment}
-        >
-          <Text style={styles.cancelButtonText}>CANCELAR</Text>
-        </TouchableOpacity>
+          <View style={styles.amountBadge}>
+            <Text style={styles.amountBadgeText}>
+              $ {currentRequest?.amount.toFixed(2)}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={cancelPayment}
+          >
+            <Text style={styles.cancelButtonText}>CANCELAR</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderSuccessState = () => (
     <View style={styles.centerContainer}>

@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Hop as Home, CreditCard, Settings, History, QrCode } from 'lucide-react-native';
+import { Hop as Home, CreditCard, Settings, History } from 'lucide-react-native';
 
 export default function TabLayout() {
   return (
@@ -47,16 +47,6 @@ export default function TabLayout() {
           headerTitle: 'Procesar Pago',
           tabBarIcon: ({ size, color }) => (
             <CreditCard size={size} color={color} strokeWidth={2} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="qr-payment"
-        options={{
-          title: 'QR',
-          headerTitle: 'Pago con QR',
-          tabBarIcon: ({ size, color }) => (
-            <QrCode size={size} color={color} strokeWidth={2} />
           ),
         }}
       />

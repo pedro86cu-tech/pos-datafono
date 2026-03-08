@@ -3,7 +3,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.58.0';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey, X-API-Key',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey, X-API-Key, X-Payment-Type',
 };
 
 interface PaymentRequestBody {
@@ -124,6 +124,9 @@ Deno.serve(async (req: Request) => {
 
     const user_id = apiKeyData.user_id;
 
+    // Get payment_type from header (default: card_debit)
+    const paymentType = req.headers.get('X-Payment-Type') || 'card_debit';
+
     // Calculate expiration time (default 30 minutes)
     const expiresInMinutes = body.expires_in_minutes || 30;
     const expiresAt = new Date();
@@ -143,6 +146,7 @@ Deno.serve(async (req: Request) => {
         items: body.items || [],
         callback_url: body.callback_url,
         metadata: body.metadata || {},
+        payment_type: paymentType,
         status: 'pending',
         expires_at: expiresAt.toISOString(),
       })
