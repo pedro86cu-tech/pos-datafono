@@ -174,6 +174,8 @@ export default function POSScreen() {
   };
 
   const processStripePayment = async () => {
+    let transactionId: string | null = null;
+
     try {
       const transactionData = {
         user_id: user!.id,
@@ -181,7 +183,7 @@ export default function POSScreen() {
         amount: currentRequest!.amount,
         currency: currentRequest!.currency,
         status: 'pending',
-        payment_method: 'tap_to_pay',
+        payment_method: 'card',
       };
 
       const { data: transaction, error: insertError } = await supabase
@@ -191,6 +193,7 @@ export default function POSScreen() {
         .single();
 
       if (insertError) throw insertError;
+      transactionId = transaction.id;
 
       const apiUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/process-payment`;
       const response = await fetch(apiUrl, {
@@ -214,28 +217,53 @@ export default function POSScreen() {
         throw new Error(result.error || 'Error al crear el pago');
       }
 
-      const { error: confirmError, paymentIntent } = await stripe.confirmPayment(
-        result.gateway_response.client_secret,
-        { paymentMethodType: 'Card' }
-      );
+      const { error: initError } = await stripe.initPaymentSheet({
+        paymentIntentClientSecret: result.gateway_response.client_secret,
+        merchantDisplayName: 'POS Mobile',
+        applePay: {
+          merchantCountryCode: 'US',
+        },
+        googlePay: {
+          merchantCountryCode: 'US',
+          testEnv: activeGateway.is_sandbox,
+        },
+        allowsDelayedPaymentMethods: true,
+      });
 
-      if (confirmError) {
-        await handlePaymentError(transaction.id, confirmError.message);
+      if (initError) {
+        throw new Error(initError.message);
+      }
+
+      const { error: presentError } = await stripe.presentPaymentSheet();
+
+      if (presentError) {
+        if (presentError.code === 'Canceled') {
+          await handlePaymentError(transaction.id, 'Pago cancelado por el usuario');
+        } else {
+          await handlePaymentError(transaction.id, presentError.message);
+        }
         return;
       }
 
       await handlePaymentSuccess(transaction.id, {
-        card_last4: paymentIntent?.payment_method?.card?.last4,
-        card_brand: paymentIntent?.payment_method?.card?.brand,
+        card_last4: null,
+        card_brand: null,
       });
     } catch (error: any) {
       console.error('Stripe payment error:', error);
-      setScreenState('error');
-      setTimeout(() => resetToWaiting(), 3000);
+
+      if (transactionId) {
+        await handlePaymentError(transactionId, error.message || 'Error desconocido');
+      } else {
+        setScreenState('error');
+        setTimeout(() => resetToWaiting(), 3000);
+      }
     }
   };
 
   const processGenericPayment = async () => {
+    let transactionId: string | null = null;
+
     try {
       const transactionData = {
         user_id: user!.id,
@@ -253,12 +281,32 @@ export default function POSScreen() {
         .single();
 
       if (error) throw error;
+      transactionId = transaction.id;
 
       await handlePaymentSuccess(transaction.id, {});
-    } catch (error) {
+    } catch (error: any) {
       console.error('Payment error:', error);
-      setScreenState('error');
-      setTimeout(() => resetToWaiting(), 3000);
+
+      if (transactionId) {
+        await handlePaymentError(transactionId, error.message || 'Error en el pago');
+      } else {
+        if (currentRequest) {
+          const apiUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/confirm-payment`;
+          await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              payment_request_id: currentRequest.id,
+              transaction_id: null,
+              status: 'failed',
+              error_message: error.message || 'Error al crear la transacción',
+            }),
+          });
+        }
+
+        setScreenState('error');
+        setTimeout(() => resetToWaiting(), 3000);
+      }
     }
   };
 
@@ -395,18 +443,41 @@ export default function POSScreen() {
     </View>
   );
 
+  const cancelPayment = async () => {
+    if (currentRequest) {
+      await supabase
+        .from('payment_requests')
+        .update({ status: 'cancelled' })
+        .eq('id', currentRequest.id);
+
+      const apiUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/confirm-payment`;
+      await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payment_request_id: currentRequest.id,
+          transaction_id: null,
+          status: 'failed',
+          error_message: 'Pago cancelado por el usuario',
+        }),
+      });
+    }
+
+    resetToWaiting();
+  };
+
   const renderProcessingState = () => (
     <View style={styles.centerContainer}>
       <View style={styles.processingCard}>
-        <Text style={styles.processingTitle}>Procesando...</Text>
+        <Text style={styles.processingTitle}>Procesando pago...</Text>
 
         <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-          <Nfc size={80} color="#3b82f6" strokeWidth={2} />
+          <CreditCard size={80} color="#3b82f6" strokeWidth={2} />
         </Animated.View>
 
-        <Text style={styles.processingText}>Acerque tarjeta o celular</Text>
+        <Text style={styles.processingText}>Ingrese los datos de la tarjeta</Text>
         <Text style={styles.processingSubtext}>
-          Visa • Mastercard • Amex
+          Visa • Mastercard • Amex • Discover
         </Text>
 
         <View style={styles.amountBadge}>
@@ -414,6 +485,13 @@ export default function POSScreen() {
             $ {currentRequest?.amount.toFixed(2)}
           </Text>
         </View>
+
+        <TouchableOpacity
+          style={styles.cancelButton}
+          onPress={cancelPayment}
+        >
+          <Text style={styles.cancelButtonText}>CANCELAR</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -745,6 +823,19 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 14,
     color: '#94a3b8',
+    textAlign: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#ef4444',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginTop: 24,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
     textAlign: 'center',
   },
 });

@@ -69,8 +69,9 @@
       [
         "@stripe/stripe-react-native",
         {
-          "merchantIdentifier": "merchant.com.yourcompany.posmobile",
-          "enableGooglePay": true
+          "merchantIdentifier": "merchant.com.ayalait.posmobile",
+          "enableGooglePay": true,
+          "enableApplePay": false
         }
       ]
     ],
