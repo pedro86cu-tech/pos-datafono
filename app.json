@@ -8,7 +8,6 @@
     "scheme": "posmobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "owner": "your-expo-username",
     "privacy": "unlisted",
     "primaryColor": "#1e293b",
     "splash": {
@@ -16,16 +15,8 @@
       "resizeMode": "contain",
       "backgroundColor": "#0f172a"
     },
-    "updates": {
-      "fallbackToCacheTimeout": 0,
-      "url": "https://u.expo.dev/[your-project-id]"
-    },
     "assetBundlePatterns": [
-      "assets/**/*.png",
-      "assets/**/*.jpg",
-      "assets/**/*.jpeg",
-      "assets/**/*.gif",
-      "assets/**/*.svg"
+      "**/*"
     ],
     "ios": {
       "supportsTablet": true,
@@ -51,7 +42,8 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.INTERNET",
-        "android.permission.ACCESS_NETWORK_STATE"
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.RECORD_AUDIO"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
@@ -86,12 +78,11 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {
-        "origin": false
-      },
+      "router": {},
       "eas": {
-        "projectId": "your-eas-project-id"
+        "projectId": "3ff3ab89-b6fb-42d8-b90e-e64676e32cd0"
       }
-    }
+    },
+    "owner": "pedro.ayala"
   }
 }
