@@ -262,14 +262,25 @@ export default function SettingsScreen() {
     setSaving(true);
     try {
       const newKey = generateAPIKey();
-      const { error } = await supabase.from('api_keys').insert({
+      console.log('Creating API key with user_id:', user!.id);
+
+      const { data, error } = await supabase.from('api_keys').insert({
         user_id: user!.id,
         key: newKey,
         name: newApiKeyName.trim(),
         is_active: true,
-      });
+      }).select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating API key:', error);
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
+        throw new Error('La API Key no se pudo guardar. Por favor intenta de nuevo.');
+      }
+
+      console.log('API key created successfully:', data[0].id);
 
       Alert.alert(
         'API Key Creada',
@@ -280,6 +291,7 @@ export default function SettingsScreen() {
       setNewApiKeyName('');
       loadSettings();
     } catch (error: any) {
+      console.error('Error in createAPIKey:', error);
       Alert.alert('Error', error.message || 'No se pudo crear la API Key');
     } finally {
       setSaving(false);

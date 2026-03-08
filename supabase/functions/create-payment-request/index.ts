@@ -49,17 +49,34 @@ Deno.serve(async (req: Request) => {
     }
 
     // Validate API Key and get user_id
+    console.log('Validating API key:', apiKey.substring(0, 10) + '...');
+
     const { data: apiKeyData, error: apiKeyError } = await supabase
       .from('api_keys')
       .select('user_id, is_active, name')
       .eq('key', apiKey)
       .maybeSingle();
 
-    if (apiKeyError || !apiKeyData) {
+    if (apiKeyError) {
+      console.error('Error querying API key:', apiKeyError);
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'Invalid API Key',
+          error: 'Error validating API Key: ' + apiKeyError.message,
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    if (!apiKeyData) {
+      console.log('API key not found in database');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Invalid API Key. Make sure you copied the complete key from the app.',
         }),
         {
           status: 401,
@@ -67,6 +84,8 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
+
+    console.log('API key validated successfully for user:', apiKeyData.user_id);
 
     if (!apiKeyData.is_active) {
       return new Response(
