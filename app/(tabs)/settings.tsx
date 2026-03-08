@@ -14,7 +14,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
-import { Building, CreditCard, Save, Trash2, Key, Copy, Plus } from 'lucide-react-native';
+import { Building, CreditCard, Save, Trash2, Key, Copy, Plus, Edit2, X } from 'lucide-react-native';
 
 interface POSConfig {
   business_name: string;
@@ -64,6 +64,8 @@ export default function SettingsScreen() {
   });
   const [apiKeys, setApiKeys] = useState<APIKey[]>([]);
   const [newApiKeyName, setNewApiKeyName] = useState('');
+  const [editingGatewayId, setEditingGatewayId] = useState<string | null>(null);
+  const [editingGateway, setEditingGateway] = useState<Gateway | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -169,6 +171,47 @@ export default function SettingsScreen() {
       loadSettings();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'No se pudo agregar la pasarela');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const editGateway = (gateway: Gateway) => {
+    setEditingGatewayId(gateway.id!);
+    setEditingGateway({ ...gateway });
+  };
+
+  const cancelEditGateway = () => {
+    setEditingGatewayId(null);
+    setEditingGateway(null);
+  };
+
+  const saveGateway = async () => {
+    if (!editingGateway || !editingGateway.api_key) {
+      Alert.alert('Error', 'La API Key es requerida');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('payment_gateways')
+        .update({
+          gateway_name: editingGateway.gateway_name,
+          api_key: editingGateway.api_key,
+          api_secret: editingGateway.api_secret,
+          is_active: editingGateway.is_active,
+          is_sandbox: editingGateway.is_sandbox,
+        })
+        .eq('id', editingGatewayId!);
+
+      if (error) throw error;
+      Alert.alert('Éxito', 'Pasarela actualizada correctamente');
+      setEditingGatewayId(null);
+      setEditingGateway(null);
+      loadSettings();
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'No se pudo actualizar la pasarela');
     } finally {
       setSaving(false);
     }
@@ -455,31 +498,153 @@ export default function SettingsScreen() {
             <Text style={styles.sectionTitle}>Pasarelas de Pago</Text>
           </View>
 
-          {gateways.map((gateway) => (
-            <View key={gateway.id} style={styles.gatewayCard}>
-              <View>
-                <Text style={styles.gatewayName}>{gateway.gateway_name}</Text>
-                <Text style={styles.gatewayKey}>
-                  {gateway.api_key.substring(0, 20)}...
-                </Text>
-                <View style={styles.gatewayBadges}>
-                  {gateway.is_active && (
-                    <View style={[styles.badge, { backgroundColor: '#dcfce7' }]}>
-                      <Text style={[styles.badgeText, { color: '#16a34a' }]}>Activa</Text>
-                    </View>
-                  )}
-                  {gateway.is_sandbox && (
-                    <View style={[styles.badge, { backgroundColor: '#fef3c7' }]}>
-                      <Text style={[styles.badgeText, { color: '#ca8a04' }]}>Sandbox</Text>
-                    </View>
-                  )}
+          {gateways.map((gateway) => {
+            const isEditing = editingGatewayId === gateway.id;
+
+            if (isEditing && editingGateway) {
+              return (
+                <View key={gateway.id} style={styles.editGatewayForm}>
+                  <View style={styles.editHeader}>
+                    <Text style={styles.formLabel}>Editando Pasarela</Text>
+                    <TouchableOpacity onPress={cancelEditGateway}>
+                      <X size={20} color="#64748b" strokeWidth={2} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={styles.fieldLabel}>Gateway</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="stripe, mercadopago, dlocal"
+                    value={editingGateway.gateway_name}
+                    onChangeText={(text) =>
+                      setEditingGateway({ ...editingGateway, gateway_name: text.toLowerCase() })
+                    }
+                    autoCapitalize="none"
+                  />
+
+                  <Text style={styles.fieldLabel}>API Key / Secret Key</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Tu API Key"
+                    value={editingGateway.api_key}
+                    onChangeText={(text) =>
+                      setEditingGateway({ ...editingGateway, api_key: text })
+                    }
+                    autoCapitalize="none"
+                    multiline={false}
+                  />
+
+                  <Text style={styles.fieldLabel}>API Secret (solo para dLocal)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Dejar vacío para Stripe y MercadoPago"
+                    value={editingGateway.api_secret}
+                    onChangeText={(text) =>
+                      setEditingGateway({ ...editingGateway, api_secret: text })
+                    }
+                    autoCapitalize="none"
+                  />
+
+                  <View style={styles.checkboxGroup}>
+                    <TouchableOpacity
+                      style={styles.checkbox}
+                      onPress={() =>
+                        setEditingGateway({
+                          ...editingGateway,
+                          is_active: !editingGateway.is_active,
+                        })
+                      }
+                    >
+                      <View
+                        style={[
+                          styles.checkboxBox,
+                          editingGateway.is_active && styles.checkboxBoxChecked,
+                        ]}
+                      />
+                      <Text style={styles.checkboxLabel}>Activar</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.checkbox}
+                      onPress={() =>
+                        setEditingGateway({
+                          ...editingGateway,
+                          is_sandbox: !editingGateway.is_sandbox,
+                        })
+                      }
+                    >
+                      <View
+                        style={[
+                          styles.checkboxBox,
+                          editingGateway.is_sandbox && styles.checkboxBoxChecked,
+                        ]}
+                      />
+                      <Text style={styles.checkboxLabel}>Modo Sandbox</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                    <TouchableOpacity
+                      style={[
+                        styles.button,
+                        { flex: 1, backgroundColor: '#e2e8f0' },
+                      ]}
+                      onPress={cancelEditGateway}
+                    >
+                      <Text style={[styles.buttonText, { color: '#64748b' }]}>
+                        Cancelar
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.button, { flex: 1 }, saving && styles.buttonDisabled]}
+                      onPress={saveGateway}
+                      disabled={saving}
+                    >
+                      {saving ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <>
+                          <Save size={20} color="#fff" strokeWidth={2} />
+                          <Text style={styles.buttonText}>Guardar</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            }
+
+            return (
+              <View key={gateway.id} style={styles.gatewayCard}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.gatewayName}>{gateway.gateway_name}</Text>
+                  <Text style={styles.gatewayKey}>
+                    {gateway.api_key.substring(0, 20)}...
+                  </Text>
+                  <View style={styles.gatewayBadges}>
+                    {gateway.is_active && (
+                      <View style={[styles.badge, { backgroundColor: '#dcfce7' }]}>
+                        <Text style={[styles.badgeText, { color: '#16a34a' }]}>Activa</Text>
+                      </View>
+                    )}
+                    {gateway.is_sandbox && (
+                      <View style={[styles.badge, { backgroundColor: '#fef3c7' }]}>
+                        <Text style={[styles.badgeText, { color: '#ca8a04' }]}>Sandbox</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                  <TouchableOpacity onPress={() => editGateway(gateway)}>
+                    <Edit2 size={20} color="#2563eb" strokeWidth={2} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => deleteGateway(gateway.id!)}>
+                    <Trash2 size={20} color="#dc2626" strokeWidth={2} />
+                  </TouchableOpacity>
                 </View>
               </View>
-              <TouchableOpacity onPress={() => deleteGateway(gateway.id!)}>
-                <Trash2 size={20} color="#dc2626" strokeWidth={2} />
-              </TouchableOpacity>
-            </View>
-          ))}
+            );
+          })}
 
           <View style={styles.newGatewayForm}>
             <Text style={styles.formLabel}>Agregar Nueva Pasarela</Text>
@@ -775,5 +940,19 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
+  },
+  editGatewayForm: {
+    backgroundColor: '#f0f9ff',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#2563eb',
+  },
+  editHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
 });
