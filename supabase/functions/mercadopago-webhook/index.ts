@@ -29,13 +29,17 @@ Deno.serve(async (req: Request) => {
     if (type === "payment") {
       const paymentId = data.id;
 
+      console.log("Processing payment webhook for ID:", paymentId);
+
       const { data: existingTransaction } = await supabase
         .from("transactions")
         .select("*")
-        .eq("gateway_transaction_id", paymentId)
-        .single();
+        .eq("gateway_transaction_id", paymentId.toString())
+        .maybeSingle();
 
       if (existingTransaction) {
+        console.log("Transaction found:", existingTransaction.id);
+
         const accessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
 
         const paymentResponse = await fetch(
@@ -48,6 +52,8 @@ Deno.serve(async (req: Request) => {
         );
 
         const payment = await paymentResponse.json();
+
+        console.log("Mercado Pago payment status:", payment.status);
 
         let status = "pending";
         if (payment.status === "approved") {
@@ -66,6 +72,8 @@ Deno.serve(async (req: Request) => {
           .eq("id", existingTransaction.id);
 
         if (existingTransaction.payment_request_id) {
+          console.log("Calling confirm-payment for request:", existingTransaction.payment_request_id);
+
           const confirmUrl = `${supabaseUrl}/functions/v1/confirm-payment`;
           await fetch(confirmUrl, {
             method: "POST",
@@ -79,6 +87,8 @@ Deno.serve(async (req: Request) => {
             }),
           });
         }
+      } else {
+        console.log("Transaction not found for payment ID:", paymentId);
       }
     }
 

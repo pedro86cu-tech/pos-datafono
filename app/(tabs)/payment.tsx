@@ -44,6 +44,9 @@ interface PaymentResult {
   card_last4?: string;
   card_brand?: string;
   transaction_id?: string;
+  qr_code?: string;
+  qr_code_base64?: string;
+  payment_link?: string;
 }
 
 export default function POSScreen() {
@@ -147,6 +150,32 @@ export default function POSScreen() {
           }
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'transactions',
+          filter: `user_id=eq.${user!.id}`,
+        },
+        (payload) => {
+          console.log('Transaction updated:', payload);
+
+          if (payload.new.status === 'completed' && screenState === 'processing') {
+            const transactionId = payload.new.id;
+
+            setPaymentResult(prev => ({
+              ...prev,
+              transaction_id: transactionId,
+            }));
+
+            setScreenState('success');
+          } else if (payload.new.status === 'failed' && screenState === 'processing') {
+            setScreenState('error');
+            setTimeout(() => resetToWaiting(), 3000);
+          }
+        }
+      )
       .subscribe();
 
     return () => {
@@ -155,7 +184,19 @@ export default function POSScreen() {
   };
 
   const startPayment = async () => {
-    if (!currentRequest || !activeGateway) {
+    if (!currentRequest) {
+      Alert.alert('Error', 'No hay solicitud de pago');
+      return;
+    }
+
+    const paymentType = currentRequest.payment_type || 'card_debit';
+
+    if (paymentType === 'qr_mp') {
+      await processMercadoPagoQR();
+      return;
+    }
+
+    if (!activeGateway) {
       Alert.alert('Error', 'No hay pasarela activa');
       return;
     }
@@ -305,6 +346,93 @@ export default function POSScreen() {
           });
         }
 
+        setScreenState('error');
+        setTimeout(() => resetToWaiting(), 3000);
+      }
+    }
+  };
+
+  const processMercadoPagoQR = async () => {
+    let transactionId: string | null = null;
+
+    try {
+      setScreenState('processing');
+
+      await supabase
+        .from('payment_requests')
+        .update({ status: 'processing' })
+        .eq('id', currentRequest!.id);
+
+      const { data: mpGateway } = await supabase
+        .from('payment_gateways')
+        .select('*')
+        .eq('gateway_name', 'mercadopago')
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!mpGateway) {
+        throw new Error('Mercado Pago no está configurado');
+      }
+
+      const transactionData = {
+        user_id: user!.id,
+        gateway_id: mpGateway.id,
+        amount: currentRequest!.amount,
+        currency: currentRequest!.currency,
+        status: 'pending',
+        payment_method: 'qr_mp',
+        payment_request_id: currentRequest!.id,
+      };
+
+      const { data: transaction, error: insertError } = await supabase
+        .from('transactions')
+        .insert(transactionData)
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+      transactionId = transaction.id;
+
+      const apiUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/create-mercadopago-payment`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: currentRequest!.amount,
+          currency: currentRequest!.currency,
+          description: currentRequest!.note || 'Pago POS Mobile',
+          customer_email: currentRequest!.customer_email,
+          customer_name: currentRequest!.customer_name,
+          external_reference: currentRequest!.external_sale_id,
+          access_token: mpGateway.api_key,
+          is_sandbox: mpGateway.is_sandbox,
+          payment_request_id: currentRequest!.id,
+          transaction_id: transaction.id,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Error al crear el QR de Mercado Pago');
+      }
+
+      setPaymentResult({
+        transaction_id: transaction.id,
+        qr_code: result.qr_code,
+        qr_code_base64: result.qr_code_base64,
+        payment_link: result.payment_link,
+      });
+
+      console.log('QR generado exitosamente:', result);
+    } catch (error: any) {
+      console.error('Mercado Pago QR error:', error);
+
+      if (transactionId) {
+        await handlePaymentError(transactionId, error.message || 'Error desconocido');
+      } else {
         setScreenState('error');
         setTimeout(() => resetToWaiting(), 3000);
       }
@@ -532,6 +660,46 @@ export default function POSScreen() {
 
   const renderProcessingState = () => {
     const paymentType = currentRequest?.payment_type || 'card_debit';
+    const isQRPayment = paymentType === 'qr_mp' || paymentType === 'qr';
+
+    if (isQRPayment && paymentResult?.qr_code_base64) {
+      return (
+        <View style={styles.centerContainer}>
+          <View style={styles.qrCard}>
+            <Text style={styles.qrTitle}>Escanea el QR para pagar</Text>
+
+            <View style={styles.qrContainer}>
+              {Platform.OS === 'web' ? (
+                <img
+                  src={`data:image/png;base64,${paymentResult.qr_code_base64}`}
+                  alt="QR Code"
+                  style={{ width: 280, height: 280 }}
+                />
+              ) : (
+                <Text style={styles.qrPlaceholder}>QR Code aquí</Text>
+              )}
+            </View>
+
+            <View style={styles.amountBadge}>
+              <Text style={styles.amountBadgeText}>
+                $ {currentRequest?.amount.toFixed(2)}
+              </Text>
+            </View>
+
+            <Text style={styles.qrInstructions}>
+              El pago se confirmará automáticamente cuando el cliente pague
+            </Text>
+
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={cancelPayment}
+            >
+              <Text style={styles.cancelButtonText}>CANCELAR</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
 
     return (
       <View style={styles.centerContainer}>
@@ -905,5 +1073,42 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
     textAlign: 'center',
+  },
+  qrCard: {
+    backgroundColor: '#1e293b',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 2,
+    borderColor: '#3b82f6',
+  },
+  qrTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  qrContainer: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 24,
+  },
+  qrPlaceholder: {
+    width: 280,
+    height: 280,
+    textAlign: 'center',
+    lineHeight: 280,
+    color: '#64748b',
+  },
+  qrInstructions: {
+    fontSize: 14,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 24,
   },
 });

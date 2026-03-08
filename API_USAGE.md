@@ -494,15 +494,55 @@ El POS registra automáticamente:
 - Solicitudes de pago creadas
 - Pagos procesados
 
+## 9. Flujo de Pago con QR de Mercado Pago
+
+Cuando usas `X-Payment-Type: qr_mp`, el sistema:
+
+1. **Genera un QR** automáticamente con Mercado Pago PIX
+2. **Muestra el QR** en la pantalla del POS para que el cliente lo escanee
+3. **Espera el pago** - el cliente escanea y paga desde su app
+4. **Recibe notificación** vía webhook cuando el pago se completa
+5. **Confirma automáticamente** y notifica a tu sistema vía callback
+
+### Configuración de Mercado Pago
+
+Antes de usar QR de Mercado Pago:
+
+1. Ve a Settings en la app POS
+2. En "Pasarelas de Pago", agrega Mercado Pago
+3. Ingresa tu Access Token de prueba desde: https://www.mercadopago.com.uy/developers/panel
+4. Activa la pasarela y guarda
+
+### Ejemplo de Solicitud con QR
+
+```bash
+curl -X POST \
+  https://[TU-PROYECTO].supabase.co/functions/v1/create-payment-request \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: pos_ABC123..." \
+  -H "X-Payment-Type: qr_mp" \
+  -d '{
+    "amount": 1500.00,
+    "currency": "UYU",
+    "customer_email": "cliente@email.com",
+    "customer_name": "Juan Pérez",
+    "note": "Compra en tienda"
+  }'
+```
+
+El POS mostrará un QR que el cliente escanea con su app de Mercado Pago. Cuando pague, tu sistema recibirá la notificación automáticamente.
+
 ## Notas Importantes
 
 1. **API Key en Header**: Siempre envía `X-API-Key` en el header
-2. **Seguridad**: Las keys tienen 52 caracteres y empiezan con `pos_`
-3. **Múltiples Keys**: Puedes tener varias (desarrollo, producción, etc.)
-4. **Desactivación**: Si una key se compromete, desactívala inmediatamente
-5. **Webhooks**: Asegúrate que tu `callback_url` sea pública y responda 200
-6. **Expiración**: Las solicitudes expiran automáticamente
-7. **Realtime**: El POS escucha nuevas solicitudes en tiempo real
+2. **Payment Type**: Usa `X-Payment-Type` para especificar el método (cash, card_debit, qr_mp, etc.)
+3. **Seguridad**: Las keys tienen 52 caracteres y empiezan con `pos_`
+4. **Múltiples Keys**: Puedes tener varias (desarrollo, producción, etc.)
+5. **Desactivación**: Si una key se compromete, desactívala inmediatamente
+6. **Webhooks**: Asegúrate que tu `callback_url` sea pública y responda 200
+7. **Expiración**: Las solicitudes expiran automáticamente
+8. **Realtime**: El POS escucha nuevas solicitudes en tiempo real
+9. **QR Mercado Pago**: Configura Mercado Pago en Settings antes de usar `qr_mp`
 
 ## Soporte
 

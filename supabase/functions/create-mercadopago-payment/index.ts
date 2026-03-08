@@ -16,6 +16,8 @@ interface CreatePaymentRequest {
   external_reference?: string;
   access_token: string;
   is_sandbox?: boolean;
+  payment_request_id?: string;
+  transaction_id?: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -41,6 +43,8 @@ Deno.serve(async (req: Request) => {
       external_reference,
       access_token,
       is_sandbox = true,
+      payment_request_id,
+      transaction_id,
     } = body;
 
     if (!amount || !access_token) {
@@ -56,14 +60,13 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const mercadoPagoUrl = is_sandbox
-      ? "https://api.mercadopago.com/v1/payments"
-      : "https://api.mercadopago.com/v1/payments";
+    const mercadoPagoUrl = "https://api.mercadopago.com/v1/payments";
 
     const paymentData: any = {
       transaction_amount: amount,
       description: description,
       payment_method_id: "pix",
+      notification_url: `${supabaseUrl}/functions/v1/mercadopago-webhook`,
       payer: {},
     };
 
@@ -79,9 +82,11 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    if (external_reference) {
-      paymentData.external_reference = external_reference;
+    if (external_reference || payment_request_id) {
+      paymentData.external_reference = external_reference || payment_request_id;
     }
+
+    console.log("Creating Mercado Pago payment:", paymentData);
 
     const mpResponse = await fetch(mercadoPagoUrl, {
       method: "POST",
@@ -107,6 +112,17 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
+    }
+
+    // Update transaction with Mercado Pago payment ID
+    if (transaction_id) {
+      await supabase
+        .from("transactions")
+        .update({
+          gateway_transaction_id: mpResult.id.toString(),
+          gateway_response: mpResult,
+        })
+        .eq("id", transaction_id);
     }
 
     return new Response(
