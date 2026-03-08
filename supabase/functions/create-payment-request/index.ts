@@ -3,11 +3,10 @@ import { createClient } from 'npm:@supabase/supabase-js@2.58.0';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey, X-API-Key',
 };
 
 interface PaymentRequestBody {
-  user_id: string;
   external_sale_id?: string;
   amount: number;
   currency?: string;
@@ -33,14 +32,69 @@ Deno.serve(async (req: Request) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const body: PaymentRequestBody = await req.json();
+    // Get and validate API Key from header
+    const apiKey = req.headers.get('X-API-Key');
 
-    // Validate required fields
-    if (!body.user_id || !body.amount || body.amount <= 0) {
+    if (!apiKey) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'user_id and amount (> 0) are required',
+          error: 'API Key is required. Provide X-API-Key header.',
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Validate API Key and get user_id
+    const { data: apiKeyData, error: apiKeyError } = await supabase
+      .from('api_keys')
+      .select('user_id, is_active, name')
+      .eq('key', apiKey)
+      .maybeSingle();
+
+    if (apiKeyError || !apiKeyData) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Invalid API Key',
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    if (!apiKeyData.is_active) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'API Key is inactive',
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Update last_used_at
+    await supabase
+      .from('api_keys')
+      .update({ last_used_at: new Date().toISOString() })
+      .eq('key', apiKey);
+
+    const body: PaymentRequestBody = await req.json();
+
+    // Validate required fields
+    if (!body.amount || body.amount <= 0) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'amount (> 0) is required',
         }),
         {
           status: 400,
@@ -48,6 +102,8 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
+
+    const user_id = apiKeyData.user_id;
 
     // Calculate expiration time (default 30 minutes)
     const expiresInMinutes = body.expires_in_minutes || 30;
@@ -58,7 +114,7 @@ Deno.serve(async (req: Request) => {
     const { data: paymentRequest, error } = await supabase
       .from('payment_requests')
       .insert({
-        user_id: body.user_id,
+        user_id: user_id,
         external_sale_id: body.external_sale_id,
         amount: body.amount,
         currency: body.currency || 'USD',

@@ -14,7 +14,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
-import { Building, CreditCard, Save, Trash2 } from 'lucide-react-native';
+import { Building, CreditCard, Save, Trash2, Key, Copy, Plus } from 'lucide-react-native';
 
 interface POSConfig {
   business_name: string;
@@ -31,6 +31,15 @@ interface Gateway {
   api_secret: string;
   is_active: boolean;
   is_sandbox: boolean;
+}
+
+interface APIKey {
+  id: string;
+  key: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+  last_used_at?: string;
 }
 
 export default function SettingsScreen() {
@@ -53,6 +62,8 @@ export default function SettingsScreen() {
     is_active: false,
     is_sandbox: true,
   });
+  const [apiKeys, setApiKeys] = useState<APIKey[]>([]);
+  const [newApiKeyName, setNewApiKeyName] = useState('');
 
   useEffect(() => {
     if (!user) {
@@ -64,9 +75,10 @@ export default function SettingsScreen() {
 
   const loadSettings = async () => {
     try {
-      const [configResult, gatewaysResult] = await Promise.all([
+      const [configResult, gatewaysResult, apiKeysResult] = await Promise.all([
         supabase.from('pos_configurations').select('*').maybeSingle(),
         supabase.from('payment_gateways').select('*'),
+        supabase.from('api_keys').select('*').order('created_at', { ascending: false }),
       ]);
 
       if (configResult.data) {
@@ -81,6 +93,10 @@ export default function SettingsScreen() {
 
       if (gatewaysResult.data) {
         setGateways(gatewaysResult.data);
+      }
+
+      if (apiKeysResult.data) {
+        setApiKeys(apiKeysResult.data);
       }
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -185,6 +201,98 @@ export default function SettingsScreen() {
     );
   };
 
+  const generateAPIKey = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let key = 'pos_';
+    for (let i = 0; i < 48; i++) {
+      key += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return key;
+  };
+
+  const createAPIKey = async () => {
+    if (!newApiKeyName.trim()) {
+      Alert.alert('Error', 'El nombre de la API Key es requerido');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const newKey = generateAPIKey();
+      const { error } = await supabase.from('api_keys').insert({
+        user_id: user!.id,
+        key: newKey,
+        name: newApiKeyName.trim(),
+        is_active: true,
+      });
+
+      if (error) throw error;
+
+      Alert.alert(
+        'API Key Creada',
+        `Tu nueva API Key es:\n\n${newKey}\n\nCópiala ahora, no podrás verla de nuevo.`,
+        [{ text: 'Copiar', onPress: () => copyToClipboard(newKey) }]
+      );
+
+      setNewApiKeyName('');
+      loadSettings();
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'No se pudo crear la API Key');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    if (Platform.OS === 'web') {
+      navigator.clipboard.writeText(text);
+      Alert.alert('Copiado', 'API Key copiada al portapapeles');
+    } else {
+      Alert.alert('API Key', text);
+    }
+  };
+
+  const deleteAPIKey = async (id: string) => {
+    Alert.alert(
+      'Confirmar',
+      '¿Estás seguro de eliminar esta API Key?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('api_keys')
+                .delete()
+                .eq('id', id);
+
+              if (error) throw error;
+              loadSettings();
+            } catch (error: any) {
+              Alert.alert('Error', error.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const toggleAPIKey = async (id: string, currentStatus: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('api_keys')
+        .update({ is_active: !currentStatus })
+        .eq('id', id);
+
+      if (error) throw error;
+      loadSettings();
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -258,6 +366,87 @@ export default function SettingsScreen() {
               </>
             )}
           </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Key size={24} color="#2563eb" strokeWidth={2} />
+            <Text style={styles.sectionTitle}>API Keys para Integraciones</Text>
+          </View>
+
+          <View style={styles.helpBox}>
+            <Text style={styles.helpTitle}>¿Para qué sirven las API Keys?</Text>
+            <Text style={styles.helpText}>
+              Las API Keys permiten que tus sistemas externos (web, apps, etc.) envíen solicitudes de pago a este POS de forma segura.
+            </Text>
+          </View>
+
+          {apiKeys.length > 0 && (
+            <View style={{ marginBottom: 16 }}>
+              {apiKeys.map((apiKey) => (
+                <View key={apiKey.id} style={styles.apiKeyCard}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.apiKeyName}>{apiKey.name}</Text>
+                    <Text style={styles.apiKeyValue}>
+                      {apiKey.key.substring(0, 16)}...{apiKey.key.substring(apiKey.key.length - 8)}
+                    </Text>
+                    <View style={styles.apiKeyInfo}>
+                      <Text style={styles.apiKeyDate}>
+                        Creada: {new Date(apiKey.created_at).toLocaleDateString()}
+                      </Text>
+                      {apiKey.last_used_at && (
+                        <Text style={styles.apiKeyDate}>
+                          Último uso: {new Date(apiKey.last_used_at).toLocaleDateString()}
+                        </Text>
+                      )}
+                    </View>
+                    {apiKey.is_active && (
+                      <View style={[styles.badge, { backgroundColor: '#dcfce7', marginTop: 8 }]}>
+                        <Text style={[styles.badgeText, { color: '#16a34a' }]}>Activa</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={{ gap: 8 }}>
+                    <TouchableOpacity onPress={() => copyToClipboard(apiKey.key)}>
+                      <Copy size={20} color="#2563eb" strokeWidth={2} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => toggleAPIKey(apiKey.id, apiKey.is_active)}>
+                      <Text style={{ fontSize: 20 }}>{apiKey.is_active ? '🔓' : '🔒'}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => deleteAPIKey(apiKey.id)}>
+                      <Trash2 size={20} color="#dc2626" strokeWidth={2} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <View style={styles.newApiKeyForm}>
+            <Text style={styles.formLabel}>Crear Nueva API Key</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Nombre descriptivo (ej: Sistema Web, App Móvil)"
+              value={newApiKeyName}
+              onChangeText={setNewApiKeyName}
+            />
+            <TouchableOpacity
+              style={[styles.button, styles.buttonSecondary, saving && styles.buttonDisabled]}
+              onPress={createAPIKey}
+              disabled={saving}
+            >
+              {saving ? (
+                <ActivityIndicator color="#2563eb" />
+              ) : (
+                <>
+                  <Plus size={20} color="#2563eb" strokeWidth={2} />
+                  <Text style={[styles.buttonText, { color: '#2563eb' }]}>
+                    Generar API Key
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -552,5 +741,39 @@ const styles = StyleSheet.create({
   checkboxLabel: {
     fontSize: 14,
     color: '#64748b',
+  },
+  apiKeyCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  apiKeyName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  apiKeyValue: {
+    fontSize: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    color: '#64748b',
+    marginBottom: 8,
+  },
+  apiKeyInfo: {
+    gap: 4,
+  },
+  apiKeyDate: {
+    fontSize: 11,
+    color: '#94a3b8',
+  },
+  newApiKeyForm: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
   },
 });
