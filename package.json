@@ -8,7 +8,7 @@
     "android": "EXPO_NO_TELEMETRY=1 expo start --android",
     "ios": "EXPO_NO_TELEMETRY=1 expo start --ios",
     "web": "EXPO_NO_TELEMETRY=1 expo start --web",
-    "dev": "EXPO_NO_TELEMETRY=1 expo start --android",
+    "dev": "EXPO_NO_TELEMETRY=1 expo start",
     "dev:clear": "EXPO_NO_TELEMETRY=1 expo start --clear",
     "build:android": "eas build --platform android",
     "build:ios": "eas build --platform ios",
