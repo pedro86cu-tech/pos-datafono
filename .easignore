@@ -1,0 +1,10 @@
+# Ignore WebP files
+*.webp
+*.WEBP
+
+# Ignore documentation files
+*.md
+!README.md
+
+# Ignore local files
+.env.local
