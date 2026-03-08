@@ -1,8 +1,27 @@
 # Notas para Builds Nativos (iOS/Android)
 
+## ⚠️ IMPORTANTE: Esta es una App Móvil
+
+Esta aplicación está diseñada para correr en **dispositivos móviles** (Android/iOS), no en web.
+
+### Cómo Correr en Desarrollo:
+
+```bash
+# Android (recomendado)
+npm run android
+
+# iOS
+npm run ios
+
+# Menú de opciones
+npm start
+```
+
+**NO uses `npm run web`** - la funcionalidad estará limitada (sin NFC, sin Stripe).
+
 ## Stripe Configuration
 
-Cuando estés listo para hacer un build nativo de la app para iOS o Android, necesitas agregar el plugin de Stripe de vuelta a `app.json`.
+Cuando estés listo para hacer un build nativo de la app para iOS o Android (para usar NFC y Stripe), necesitas agregar el plugin de Stripe de vuelta a `app.json`.
 
 ### Paso 1: Agregar el plugin de Stripe
 

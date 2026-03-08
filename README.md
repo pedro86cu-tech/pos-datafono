@@ -139,18 +139,25 @@ supabase/functions/
 
 ## Compatibilidad
 
-### Plataformas:
-- ✅ Web (funcionalidad limitada de NFC)
-- ✅ iOS (requiere permisos de NFC)
-- ✅ Android (requiere permisos de NFC)
+### Plataforma Principal:
+- ✅ **Android** (requiere permisos de NFC) - RECOMENDADO
+- ✅ **iOS** (requiere permisos de NFC)
+
+### Plataforma Secundaria:
+- ⚠️ **Web** (funcionalidad MUY limitada)
+  - Solo para pruebas básicas de UI
+  - NFC NO disponible
+  - Stripe NO disponible
+  - Solo Mercado Pago QR disponible
 
 ### Requisitos:
-- **Para NFC**:
+- **Para Funcionalidad Completa (NFC + Stripe)**:
   - iOS 13+ con capacidad NFC
   - Android 4.4+ (API level 19) con chip NFC
-- **Para Web**:
-  - Navegador moderno
-  - Solo pagos manuales disponibles
+  - Build nativo (no Expo Go)
+- **Para Desarrollo Básico (Expo Go)**:
+  - Android/iOS con Expo Go instalado
+  - Solo pagos QR de Mercado Pago disponibles
 
 ## Seguridad
 
@@ -174,21 +181,62 @@ supabase/functions/
 npm install
 ```
 
-### Desarrollo:
+### Correr la App en Desarrollo:
+
+Esta es una **aplicación móvil nativa**. Para desarrollar, necesitas correrla en un dispositivo o simulador:
+
+#### Android (Recomendado):
+```bash
+npm run android
+```
+O simplemente:
 ```bash
 npm run dev
 ```
 
-### Build Web:
+#### iOS:
 ```bash
-npm run build:web
+npm run ios
 ```
 
-### Build Nativo:
-Requiere Expo Dev Client para probar NFC en dispositivos reales
+#### Web (Funcionalidad Limitada):
+Solo para pruebas básicas. NFC, Stripe y otras funciones nativas NO funcionarán.
 ```bash
-npx expo prebuild
+npm run web
 ```
+
+#### Todos (Menú de Opciones):
+```bash
+npm start
+```
+
+### Requisitos para Desarrollo:
+
+1. **Dispositivo Físico** (Recomendado para NFC):
+   - Instala Expo Go desde Play Store/App Store
+   - Escanea el código QR cuando corras `npm run dev`
+   - NFC requiere un build nativo (ver sección de Build Nativo)
+
+2. **Emulador/Simulador**:
+   - **Android**: Android Studio con emulador configurado
+   - **iOS**: Xcode con iOS Simulator (solo macOS)
+
+### Build Nativo (Para NFC y Stripe):
+
+Para probar NFC y Stripe, necesitas crear un build de desarrollo:
+
+```bash
+# Instalar EAS CLI
+npm install -g eas-cli
+eas login
+
+# Crear build de desarrollo
+eas build --profile development --platform android
+# o para iOS
+eas build --profile development --platform ios
+```
+
+Luego instala el archivo APK/IPA generado en tu dispositivo.
 
 ## Deployment
 
