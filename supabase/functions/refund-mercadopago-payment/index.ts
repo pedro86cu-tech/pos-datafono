@@ -4,13 +4,12 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers":
-    "Content-Type, Authorization, X-Client-Info, Apikey",
+    "Content-Type, Authorization, X-Client-Info, Apikey, X-API-Key",
 };
 
 interface RefundRequest {
   payment_id: number;
   amount?: number;
-  access_token: string;
   reason?: string;
   transaction_id?: string;
 }
@@ -28,14 +27,81 @@ Deno.serve(async (req: Request) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const body: RefundRequest = await req.json();
-    const { payment_id, amount, access_token, reason, transaction_id } = body;
+    // Get and validate API Key from header
+    const apiKey = req.headers.get("X-API-Key");
 
-    if (!payment_id || !access_token) {
+    if (!apiKey) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "payment_id y access_token son requeridos",
+          error: "API Key is required. Provide X-API-Key header.",
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Validate API Key and get user_id
+    console.log("Validating API key:", apiKey.substring(0, 10) + "...");
+
+    const { data: apiKeyData, error: apiKeyError } = await supabase
+      .from("api_keys")
+      .select("user_id, is_active, mercadopago_access_token")
+      .eq("key", apiKey)
+      .maybeSingle();
+
+    if (apiKeyError) {
+      console.error("Error querying API key:", apiKeyError);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Error validating API Key: " + apiKeyError.message,
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (!apiKeyData) {
+      console.log("API key not found in database");
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error:
+            "Invalid API Key. Make sure you copied the complete key from the app.",
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    console.log("API key validated successfully for user:", apiKeyData.user_id);
+
+    if (!apiKeyData.is_active) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "API Key is inactive",
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (!apiKeyData.mercadopago_access_token) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error:
+            "Mercado Pago access token not configured. Please configure it in the app settings.",
         }),
         {
           status: 400,
@@ -43,6 +109,30 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
+
+    // Update last_used_at
+    await supabase
+      .from("api_keys")
+      .update({ last_used_at: new Date().toISOString() })
+      .eq("key", apiKey);
+
+    const body: RefundRequest = await req.json();
+    const { payment_id, amount, reason, transaction_id } = body;
+
+    if (!payment_id) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "payment_id es requerido",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const access_token = apiKeyData.mercadopago_access_token;
 
     console.log("Processing refund for payment:", payment_id);
 
