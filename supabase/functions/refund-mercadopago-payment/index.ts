@@ -105,7 +105,7 @@ Deno.serve(async (req: Request) => {
     // Get Mercado Pago access token from payment_gateways
     const { data: gatewayData, error: gatewayError } = await supabase
       .from("payment_gateways")
-      .select("api_key, is_active")
+      .select("api_key, is_active, is_sandbox")
       .eq("user_id", apiKeyData.user_id)
       .eq("gateway_name", "mercadopago")
       .eq("is_active", true)
@@ -235,8 +235,10 @@ Deno.serve(async (req: Request) => {
     }
 
     const access_token = gatewayData.api_key;
+    const isSandbox = gatewayData.is_sandbox || false;
 
     console.log("Processing refund for Mercado Pago payment:", mercadoPagoPaymentId);
+    console.log("Sandbox mode:", isSandbox);
 
     // Build refund request
     const refundData: any = {};
@@ -248,6 +250,8 @@ Deno.serve(async (req: Request) => {
     }
 
     // Call Mercado Pago refund API
+    // Note: Mercado Pago uses the same URL for both sandbox and production
+    // The mode is determined by the access_token used
     const mercadoPagoUrl = `https://api.mercadopago.com/v1/payments/${mercadoPagoPaymentId}/refunds`;
 
     console.log("Calling Mercado Pago refund API:", mercadoPagoUrl);
