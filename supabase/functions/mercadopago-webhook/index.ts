@@ -7,6 +7,83 @@ const corsHeaders = {
     "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+async function validateWebhookSignature(
+  req: Request,
+  body: any
+): Promise<boolean> {
+  try {
+    const xSignature = req.headers.get("x-signature");
+    const xRequestId = req.headers.get("x-request-id");
+    const webhookSecret = Deno.env.get("MERCADOPAGO_WEBHOOK_SECRET");
+
+    if (!xSignature || !xRequestId) {
+      console.log("Missing signature headers");
+      return false;
+    }
+
+    // If no webhook secret is configured, skip validation (not recommended for production)
+    if (!webhookSecret) {
+      console.warn("WARNING: MERCADOPAGO_WEBHOOK_SECRET not configured, skipping signature validation");
+      return true;
+    }
+
+    // Extract ts and hash from x-signature header
+    // Format: "ts=1234567890,v1=hash"
+    const parts = xSignature.split(",");
+    let ts = "";
+    let hash = "";
+
+    for (const part of parts) {
+      const [key, value] = part.split("=");
+      if (key === "ts") ts = value;
+      if (key === "v1") hash = value;
+    }
+
+    if (!ts || !hash) {
+      console.log("Invalid signature format");
+      return false;
+    }
+
+    // Create the manifest string
+    const dataId = body.data?.id || "";
+    const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+
+    // Generate HMAC SHA256
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(webhookSecret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+
+    const signature = await crypto.subtle.sign(
+      "HMAC",
+      key,
+      encoder.encode(manifest)
+    );
+
+    // Convert to hex string
+    const hexSignature = Array.from(new Uint8Array(signature))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
+    const isValid = hexSignature === hash;
+
+    if (!isValid) {
+      console.log("Signature mismatch");
+      console.log("Expected:", hash);
+      console.log("Got:", hexSignature);
+    }
+
+    return isValid;
+  } catch (error) {
+    console.error("Error validating signature:", error);
+    return false;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -23,6 +100,22 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
 
     console.log("Mercado Pago webhook received:", body);
+
+    // Validate webhook signature
+    const isValid = await validateWebhookSignature(req, body);
+    if (!isValid) {
+      console.error("Invalid webhook signature");
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Invalid signature",
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
     const { type, data } = body;
 
