@@ -48,7 +48,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: paymentRequest, error: fetchError } = await supabase
       .from('payment_requests')
-      .select('*, transactions(*)')
+      .select('*')
       .eq('id', body.payment_request_id)
       .maybeSingle();
 
