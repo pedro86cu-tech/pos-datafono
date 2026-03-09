@@ -48,7 +48,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: apiKeyData, error: apiKeyError } = await supabase
       .from("api_keys")
-      .select("user_id, is_active, mercadopago_access_token")
+      .select("user_id, is_active")
       .eq("key", apiKey)
       .maybeSingle();
 
@@ -96,12 +96,41 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (!apiKeyData.mercadopago_access_token) {
+    // Update last_used_at
+    await supabase
+      .from("api_keys")
+      .update({ last_used_at: new Date().toISOString() })
+      .eq("key", apiKey);
+
+    // Get Mercado Pago access token from payment_gateways
+    const { data: gatewayData, error: gatewayError } = await supabase
+      .from("payment_gateways")
+      .select("api_key, is_active")
+      .eq("user_id", apiKeyData.user_id)
+      .eq("gateway_name", "mercadopago")
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (gatewayError) {
+      console.error("Error querying payment gateway:", gatewayError);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Error getting Mercado Pago configuration: " + gatewayError.message,
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (!gatewayData) {
       return new Response(
         JSON.stringify({
           success: false,
           error:
-            "Mercado Pago access token not configured. Please configure it in the app settings.",
+            "Mercado Pago is not configured or is inactive. Please configure it in the app settings.",
         }),
         {
           status: 400,
@@ -109,12 +138,6 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
-
-    // Update last_used_at
-    await supabase
-      .from("api_keys")
-      .update({ last_used_at: new Date().toISOString() })
-      .eq("key", apiKey);
 
     const body: RefundRequest = await req.json();
     const { payment_id, amount, reason, transaction_id } = body;
@@ -132,7 +155,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const access_token = apiKeyData.mercadopago_access_token;
+    const access_token = gatewayData.api_key;
 
     console.log("Processing refund for payment:", payment_id);
 
