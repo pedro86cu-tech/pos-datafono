@@ -96,8 +96,8 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    if (external_reference || payment_request_id) {
-      preferenceData.external_reference = external_reference || payment_request_id;
+    if (payment_request_id || external_reference) {
+      preferenceData.external_reference = payment_request_id || external_reference;
     }
 
     console.log("Creating Mercado Pago preference:", preferenceData);
