@@ -391,6 +391,35 @@ export default function POSScreen() {
         .update({ status: 'processing' })
         .eq('id', currentRequest!.id);
 
+      // Start polling for payment status as backup to Realtime
+      const pollInterval = setInterval(async () => {
+        const { data: request } = await supabase
+          .from('payment_requests')
+          .select('status, transaction_id')
+          .eq('id', currentRequest!.id)
+          .maybeSingle();
+
+        if (request) {
+          console.log('Polling payment_request status:', request.status);
+
+          if (request.status === 'completed') {
+            clearInterval(pollInterval);
+            setPaymentResult(prev => ({
+              ...prev,
+              transaction_id: request.transaction_id,
+            }));
+            setScreenState('success');
+          } else if (request.status === 'failed') {
+            clearInterval(pollInterval);
+            setScreenState('error');
+            setTimeout(() => resetToWaiting(), 3000);
+          }
+        }
+      }, 2000);
+
+      // Clear interval after 5 minutes
+      setTimeout(() => clearInterval(pollInterval), 300000);
+
       const { data: mpGateway } = await supabase
         .from('payment_gateways')
         .select('*')

@@ -226,7 +226,7 @@ Deno.serve(async (req: Request) => {
         console.log("Calling confirm-payment for request:", existingTransaction.payment_request_id);
 
         const confirmUrl = `${supabaseUrl}/functions/v1/confirm-payment`;
-        await fetch(confirmUrl, {
+        const confirmResponse = await fetch(confirmUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -237,6 +237,13 @@ Deno.serve(async (req: Request) => {
             status: status,
           }),
         });
+
+        const confirmResult = await confirmResponse.json();
+        console.log("Confirm-payment response:", confirmResult);
+
+        if (!confirmResponse.ok) {
+          console.error("Confirm-payment failed:", confirmResult);
+        }
       }
     } else {
       console.log("Transaction not found for payment");
