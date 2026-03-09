@@ -31,28 +31,59 @@ Deno.serve(async (req: Request) => {
 
       console.log("Processing payment webhook for ID:", paymentId);
 
-      const { data: existingTransaction } = await supabase
-        .from("transactions")
-        .select("*")
-        .eq("gateway_transaction_id", paymentId.toString())
-        .maybeSingle();
+      const accessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
+
+      const paymentResponse = await fetch(
+        `https://api.mercadopago.com/v1/payments/${paymentId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      const payment = await paymentResponse.json();
+      console.log("Mercado Pago payment details:", payment);
+
+      let existingTransaction = null;
+
+      // First try to find by gateway_transaction_id (preference_id)
+      if (payment.preference_id) {
+        const { data } = await supabase
+          .from("transactions")
+          .select("*")
+          .eq("gateway_transaction_id", payment.preference_id.toString())
+          .maybeSingle();
+
+        existingTransaction = data;
+      }
+
+      // If not found by preference_id, try by external_reference (payment_request_id)
+      if (!existingTransaction && payment.external_reference) {
+        console.log("Searching by external_reference:", payment.external_reference);
+
+        const { data: paymentRequest } = await supabase
+          .from("payment_requests")
+          .select("id")
+          .eq("id", payment.external_reference)
+          .maybeSingle();
+
+        if (paymentRequest) {
+          const { data } = await supabase
+            .from("transactions")
+            .select("*")
+            .eq("payment_request_id", paymentRequest.id)
+            .eq("status", "pending")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          existingTransaction = data;
+        }
+      }
 
       if (existingTransaction) {
         console.log("Transaction found:", existingTransaction.id);
-
-        const accessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
-
-        const paymentResponse = await fetch(
-          `https://api.mercadopago.com/v1/payments/${paymentId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
-          }
-        );
-
-        const payment = await paymentResponse.json();
-
         console.log("Mercado Pago payment status:", payment.status);
 
         let status = "pending";
@@ -66,6 +97,7 @@ Deno.serve(async (req: Request) => {
           .from("transactions")
           .update({
             status: status,
+            gateway_transaction_id: payment.id.toString(),
             gateway_response: payment,
             completed_at: payment.status === "approved" ? new Date().toISOString() : null,
           })
@@ -89,6 +121,8 @@ Deno.serve(async (req: Request) => {
         }
       } else {
         console.log("Transaction not found for payment ID:", paymentId);
+        console.log("Payment external_reference:", payment.external_reference);
+        console.log("Payment preference_id:", payment.preference_id);
       }
     }
 

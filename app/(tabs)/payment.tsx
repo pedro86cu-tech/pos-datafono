@@ -158,6 +158,31 @@ export default function POSScreen() {
         {
           event: 'UPDATE',
           schema: 'public',
+          table: 'payment_requests',
+          filter: `user_id=eq.${user!.id}`,
+        },
+        (payload) => {
+          console.log('Payment request updated:', payload);
+
+          if (payload.new.status === 'completed' && currentRequest?.id === payload.new.id) {
+            console.log('Payment completed via webhook!');
+            setPaymentResult(prev => ({
+              ...prev,
+              transaction_id: payload.new.transaction_id,
+            }));
+            setScreenState('success');
+          } else if (payload.new.status === 'failed' && currentRequest?.id === payload.new.id) {
+            console.log('Payment failed via webhook');
+            setScreenState('error');
+            setTimeout(() => resetToWaiting(), 3000);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
           table: 'transactions',
           filter: `user_id=eq.${user!.id}`,
         },
