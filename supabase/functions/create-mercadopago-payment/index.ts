@@ -60,33 +60,47 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const mercadoPagoUrl = "https://api.mercadopago.com/v1/payments";
+    const mercadoPagoUrl = "https://api.mercadopago.com/checkout/preferences";
 
-    const paymentData: any = {
-      transaction_amount: amount,
-      description: description,
-      payment_method_id: "pix",
+    const preferenceData: any = {
+      items: [
+        {
+          title: description,
+          quantity: 1,
+          unit_price: amount,
+          currency_id: currency,
+        },
+      ],
       notification_url: `${supabaseUrl}/functions/v1/mercadopago-webhook`,
-      payer: {},
+      back_urls: {
+        success: `${supabaseUrl}/payment-success`,
+        failure: `${supabaseUrl}/payment-failure`,
+        pending: `${supabaseUrl}/payment-pending`,
+      },
+      auto_return: "approved",
+      payment_methods: {
+        installments: 1,
+      },
     };
 
     if (customer_email) {
-      paymentData.payer.email = customer_email;
-    }
-
-    if (customer_name) {
-      const [firstName, ...lastNameParts] = customer_name.split(" ");
-      paymentData.payer.first_name = firstName;
-      if (lastNameParts.length > 0) {
-        paymentData.payer.last_name = lastNameParts.join(" ");
+      preferenceData.payer = {
+        email: customer_email,
+      };
+      if (customer_name) {
+        const [firstName, ...lastNameParts] = customer_name.split(" ");
+        preferenceData.payer.name = firstName;
+        if (lastNameParts.length > 0) {
+          preferenceData.payer.surname = lastNameParts.join(" ");
+        }
       }
     }
 
     if (external_reference || payment_request_id) {
-      paymentData.external_reference = external_reference || payment_request_id;
+      preferenceData.external_reference = external_reference || payment_request_id;
     }
 
-    console.log("Creating Mercado Pago payment:", paymentData);
+    console.log("Creating Mercado Pago preference:", preferenceData);
 
     const mpResponse = await fetch(mercadoPagoUrl, {
       method: "POST",
@@ -94,7 +108,7 @@ Deno.serve(async (req: Request) => {
         "Content-Type": "application/json",
         Authorization: `Bearer ${access_token}`,
       },
-      body: JSON.stringify(paymentData),
+      body: JSON.stringify(preferenceData),
     });
 
     const mpResult = await mpResponse.json();
@@ -114,7 +128,13 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Update transaction with Mercado Pago payment ID
+    // Generate QR code from init_point
+    const qrData = mpResult.init_point;
+
+    // Generate a simple QR code using a free API
+    const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=512x512&data=${encodeURIComponent(qrData)}`;
+
+    // Update transaction with Mercado Pago preference ID
     if (transaction_id) {
       await supabase
         .from("transactions")
@@ -129,13 +149,13 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({
         success: true,
         payment_id: mpResult.id,
-        status: mpResult.status,
-        payment_link: mpResult.point_of_interaction?.transaction_data
-          ?.ticket_url || mpResult.init_point,
-        qr_code: mpResult.point_of_interaction?.transaction_data?.qr_code,
-        qr_code_base64: mpResult.point_of_interaction?.transaction_data
-          ?.qr_code_base64,
-        external_resource_url: mpResult.external_resource_url,
+        status: "pending",
+        payment_link: mpResult.init_point,
+        sandbox_init_point: mpResult.sandbox_init_point,
+        qr_code: qrData,
+        qr_code_base64: null,
+        qr_image_url: qrApiUrl,
+        preference_id: mpResult.id,
         full_response: mpResult,
       }),
       {

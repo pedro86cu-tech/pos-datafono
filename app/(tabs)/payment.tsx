@@ -46,6 +46,7 @@ interface PaymentResult {
   transaction_id?: string;
   qr_code?: string;
   qr_code_base64?: string;
+  qr_image_url?: string;
   payment_link?: string;
 }
 
@@ -423,6 +424,7 @@ export default function POSScreen() {
         transaction_id: transaction.id,
         qr_code: result.qr_code,
         qr_code_base64: result.qr_code_base64,
+        qr_image_url: result.qr_image_url,
         payment_link: result.payment_link,
       });
 
@@ -662,7 +664,11 @@ export default function POSScreen() {
     const paymentType = currentRequest?.payment_type || 'card_debit';
     const isQRPayment = paymentType === 'qr_mp' || paymentType === 'qr';
 
-    if (isQRPayment && paymentResult?.qr_code_base64) {
+    if (isQRPayment && (paymentResult?.qr_code_base64 || paymentResult?.qr_image_url)) {
+      const qrSource = paymentResult.qr_code_base64
+        ? `data:image/png;base64,${paymentResult.qr_code_base64}`
+        : paymentResult.qr_image_url;
+
       return (
         <View style={styles.centerContainer}>
           <View style={styles.qrCard}>
@@ -671,7 +677,7 @@ export default function POSScreen() {
             <View style={styles.qrContainer}>
               {Platform.OS === 'web' ? (
                 <img
-                  src={`data:image/png;base64,${paymentResult.qr_code_base64}`}
+                  src={qrSource}
                   alt="QR Code"
                   style={{ width: 280, height: 280 }}
                 />
