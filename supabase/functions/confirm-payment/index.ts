@@ -28,6 +28,8 @@ Deno.serve(async (req: Request) => {
 
     const body: ConfirmPaymentBody = await req.json();
 
+    console.log('Confirm-payment called with:', JSON.stringify(body, null, 2));
+
     if (!body.payment_request_id || !body.status) {
       return new Response(
         JSON.stringify({
@@ -42,17 +44,27 @@ Deno.serve(async (req: Request) => {
     }
 
     // Get payment request
+    console.log('Looking for payment_request with id:', body.payment_request_id);
+
     const { data: paymentRequest, error: fetchError } = await supabase
       .from('payment_requests')
       .select('*, transactions(*)')
       .eq('id', body.payment_request_id)
-      .single();
+      .maybeSingle();
+
+    console.log('Payment request query result:', {
+      found: !!paymentRequest,
+      error: fetchError?.message,
+      data: paymentRequest ? { id: paymentRequest.id, status: paymentRequest.status } : null
+    });
 
     if (fetchError || !paymentRequest) {
+      console.error('Payment request not found. Error:', fetchError);
       return new Response(
         JSON.stringify({
           success: false,
           error: 'Payment request not found',
+          details: fetchError?.message,
         }),
         {
           status: 404,
