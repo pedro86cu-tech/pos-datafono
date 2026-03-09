@@ -9,11 +9,13 @@ import {
   Platform,
   ScrollView,
   Animated,
+  Image,
 } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { CreditCard, CircleCheck as CheckCircle, Circle as XCircle, Nfc, Smartphone, Receipt, RefreshCw, QrCode, DollarSign, ArrowRightLeft } from 'lucide-react-native';
+import QRCode from 'react-native-qrcode-svg';
 
 let useStripe: any = null;
 if (Platform.OS !== 'web') {
@@ -681,8 +683,21 @@ export default function POSScreen() {
                   alt="QR Code"
                   style={{ width: 280, height: 280 }}
                 />
+              ) : paymentResult.qr_code ? (
+                <QRCode
+                  value={paymentResult.qr_code}
+                  size={280}
+                  backgroundColor="white"
+                  color="black"
+                />
+              ) : paymentResult.qr_image_url ? (
+                <Image
+                  source={{ uri: paymentResult.qr_image_url }}
+                  style={{ width: 280, height: 280 }}
+                  resizeMode="contain"
+                />
               ) : (
-                <Text style={styles.qrPlaceholder}>QR Code aquí</Text>
+                <ActivityIndicator size="large" color="#3b82f6" />
               )}
             </View>
 
