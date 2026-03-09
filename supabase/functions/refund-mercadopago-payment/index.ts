@@ -8,10 +8,10 @@ const corsHeaders = {
 };
 
 interface RefundRequest {
-  payment_id: number;
+  payment_id?: string | number;
+  transaction_id?: string;
   amount?: number;
   reason?: string;
-  transaction_id?: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -142,11 +142,90 @@ Deno.serve(async (req: Request) => {
     const body: RefundRequest = await req.json();
     const { payment_id, amount, reason, transaction_id } = body;
 
-    if (!payment_id) {
+    if (!payment_id && !transaction_id) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "payment_id es requerido",
+          error: "payment_id o transaction_id es requerido",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    let mercadoPagoPaymentId: number;
+    let localTransactionId: string | undefined = transaction_id;
+
+    // If transaction_id is provided, get the Mercado Pago payment_id from database
+    if (transaction_id) {
+      console.log("Looking up transaction:", transaction_id);
+
+      const { data: transactionData, error: transactionError } = await supabase
+        .from("transactions")
+        .select("transaction_reference, metadata")
+        .eq("id", transaction_id)
+        .eq("user_id", apiKeyData.user_id)
+        .maybeSingle();
+
+      if (transactionError) {
+        console.error("Error querying transaction:", transactionError);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Error getting transaction: " + transactionError.message,
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      if (!transactionData) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Transaction not found",
+          }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Try to get payment_id from metadata or transaction_reference
+      const mpPaymentId = transactionData.metadata?.mercadopago_payment_id ||
+                          transactionData.transaction_reference;
+
+      if (!mpPaymentId) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Mercado Pago payment_id not found in transaction",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      mercadoPagoPaymentId = parseInt(mpPaymentId);
+      console.log("Found Mercado Pago payment_id:", mercadoPagoPaymentId);
+    } else {
+      // Use provided payment_id directly
+      mercadoPagoPaymentId = typeof payment_id === 'string' ? parseInt(payment_id) : payment_id!;
+      console.log("Using provided payment_id:", mercadoPagoPaymentId);
+    }
+
+    if (isNaN(mercadoPagoPaymentId)) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Invalid payment_id format. Must be a number.",
         }),
         {
           status: 400,
@@ -157,7 +236,7 @@ Deno.serve(async (req: Request) => {
 
     const access_token = gatewayData.api_key;
 
-    console.log("Processing refund for payment:", payment_id);
+    console.log("Processing refund for Mercado Pago payment:", mercadoPagoPaymentId);
 
     // Build refund request
     const refundData: any = {};
@@ -169,7 +248,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Call Mercado Pago refund API
-    const mercadoPagoUrl = `https://api.mercadopago.com/v1/payments/${payment_id}/refunds`;
+    const mercadoPagoUrl = `https://api.mercadopago.com/v1/payments/${mercadoPagoPaymentId}/refunds`;
 
     console.log("Calling Mercado Pago refund API:", mercadoPagoUrl);
 
@@ -203,7 +282,7 @@ Deno.serve(async (req: Request) => {
 
     // Register refund in database
     const refundRecord: any = {
-      payment_id: payment_id.toString(),
+      payment_id: mercadoPagoPaymentId.toString(),
       refund_id: mpResult.id,
       amount: mpResult.amount || 0,
       status: mpResult.status,
@@ -212,8 +291,8 @@ Deno.serve(async (req: Request) => {
       created_at: new Date().toISOString(),
     };
 
-    if (transaction_id) {
-      refundRecord.transaction_id = transaction_id;
+    if (localTransactionId) {
+      refundRecord.transaction_id = localTransactionId;
     }
 
     // Store refund information
@@ -227,14 +306,14 @@ Deno.serve(async (req: Request) => {
     }
 
     // Update transaction status if transaction_id provided
-    if (transaction_id) {
+    if (localTransactionId) {
       const { error: updateError } = await supabase
         .from("transactions")
         .update({
           status: "refunded",
           updated_at: new Date().toISOString(),
         })
-        .eq("id", transaction_id);
+        .eq("id", localTransactionId);
 
       if (updateError) {
         console.error("Error updating transaction:", updateError);
@@ -245,7 +324,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({
         success: true,
         refund_id: mpResult.id,
-        payment_id: payment_id,
+        payment_id: mercadoPagoPaymentId,
         amount_refunded: mpResult.amount,
         status: mpResult.status,
         refund_type: amount ? "partial" : "total",
